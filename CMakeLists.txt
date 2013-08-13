@@ -99,7 +99,7 @@ add_executable(marker_localization src/marker_localization.cpp)
 # )
 install(
     PROGRAMS
-       static_odom_broadcaster.py
+       scripts/static_odom_broadcaster.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
