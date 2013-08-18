@@ -1,99 +1,132 @@
-/*
-#include <ros/ros.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include "std_msgs/String.h"
 #include <sstream>
-
-int main(int argc, char** argv)
-{
-  ros::init(argc, argv, "marker_localization");
-
-  ros::NodeHandle n;
-
-  ros::Publisher chatter_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
-  float data_x=0.0;
-  ros::Rate loop_rate(10);
-
-  while(ros::ok())
-  {
-    geometry_msgs::PoseWithCovarianceStamped push_data;
-    push_data.pose.pose.position.x = data_x;
-    data_x+=0.01;
-    push_data.header.frame_id = "/map";
-    push_data.pose.covariance[0] = 0.25;
-    push_data.pose.covariance[7] = 0.25;
-    push_data.pose.covariance[35] = 0.06853891945200942;
-
-    push_data.pose.pose.orientation.z= -0.505052895004;
-    push_data.pose.pose.orientation.w= 0.863088392488;
-
-    chatter_pub.publish(push_data);
-    ros::spinOnce();
-    loop_rate.sleep();
-   // ROS_INFO("send_data %f",(float)push_data.pose.pose.position.x);
-  }
-
-  //ros::spin();
-
-  return 0;
-}
-*/
 #include <ros/ros.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include "std_msgs/String.h"
-#include <sstream>
 #include <visualization_msgs/Marker.h>
+#include "tf/transform_datatypes.h"
+#include "tf/transform_broadcaster.h"
+#include "tf/transform_listener.h"
+#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include "std_msgs/String.h"
+#include "tf/tf.h"
 
-ros::Publisher chatter_pub;
+ros::Publisher posewcov_pub, pose_pub;
 ros::Subscriber sub;
 
-geometry_msgs::PoseWithCovarianceStamped push_data;
+tf::TransformListener *m_tfListener;
+tf::TransformBroadcaster *m_tfBroadcaster;
+
+geometry_msgs::PoseWithCovarianceStamped base_pose_withCov;
+geometry_msgs::PoseStamped marker_pose, base_pose;
+geometry_msgs::PoseStamped cam_base_pose, base_base_pose;
+
+void rotateOrientation(geometry_msgs::PoseStamped &pose, double sum_pitch){
+	double r, p, y;
+
+	tf::Quaternion quat(pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z,
+			pose.pose.orientation.w);
+
+	tf::Matrix3x3(quat).getRPY(r, p, y);
+
+	pose.pose.orientation.x = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getX();
+	pose.pose.orientation.y = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getY();
+	pose.pose.orientation.z = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getZ();
+	pose.pose.orientation.w = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getW();
+}
 
 void ReceiveCallback(const visualization_msgs::Marker mrk)
 {
-  push_data.pose.pose.position.x = mrk.pose.position.x;
-  push_data.pose.pose.position.y = mrk.pose.position.y;
-  push_data.pose.pose.position.z = mrk.pose.position.z;
+	switch(mrk.id){
+	case 0 : marker_pose.header.frame_id = "/softstroller/marker_front_link";
+			 break;
+	case 1 : marker_pose.header.frame_id = "/softstroller/marker_right_link";
+			 break;
+	case 2 : marker_pose.header.frame_id = "/softstroller/marker_backward_link";
+			 break;
+	case 3 : marker_pose.header.frame_id = "/softstroller/marker_left_link";
+			 break;
+	default : marker_pose.header.frame_id = "/softstroller/marker_front_link";
+			 break;
+	}
 
-  push_data.pose.pose.orientation.x = mrk.pose.orientation.x;
-  push_data.pose.pose.orientation.y = mrk.pose.orientation.y;
-  push_data.pose.pose.orientation.z = mrk.pose.orientation.z;
-  push_data.pose.pose.orientation.w = mrk.pose.orientation.w;
+	marker_pose.pose.orientation.w = 1;
+	try
+	{
+		m_tfListener->transformPose("/softstroller/base_link", marker_pose, base_pose);
 
-  ROS_INFO("get_data %f",(float)push_data.pose.pose.position.x);
-  chatter_pub.publish(push_data);
+		cam_base_pose.header.frame_id = "/watcher/camera_front";
+		cam_base_pose.pose.position.y = base_pose.pose.position.z; //mrk.pose.position.y + base_pose.pose.position.z;
+		cam_base_pose.pose.orientation = mrk.pose.orientation;
+
+		switch(mrk.id){
+		case 0 : rotateOrientation(cam_base_pose, 1.570795);
+				 cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
+				 cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
+				 break;
+		case 1 : rotateOrientation(cam_base_pose, 0);
+				 cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.x;
+				 cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.y;
+				 break;
+		case 2 : rotateOrientation(cam_base_pose, -1.570795);
+				 cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.y;
+				 cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.x;
+				 break;
+		case 3 : rotateOrientation(cam_base_pose, 3.141592);
+				 cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.x;
+				 cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.y;
+				 break;
+		default : rotateOrientation(cam_base_pose, 1.570795);
+				  cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
+				  cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
+				  break;
+		}
+
+		m_tfListener->transformPose("/watcher/base_link", cam_base_pose, base_base_pose);
+	}
+	catch(tf::TransformException &e)
+	{
+		ROS_ERROR("Failed to transform");
+		return;
+	}
+
+	base_pose_withCov.header.frame_id = base_base_pose.header.frame_id;
+	base_pose_withCov.header.stamp = ros::Time();
+	base_pose_withCov.pose.pose = base_base_pose.pose;
+
+	m_tfBroadcaster->sendTransform(tf::StampedTransform(
+						tf::Transform(
+								tf::Quaternion(base_base_pose.pose.orientation.x, base_base_pose.pose.orientation.y,
+											   base_base_pose.pose.orientation.z, base_base_pose.pose.orientation.w),
+								tf::Vector3(base_base_pose.pose.position.x, base_base_pose.pose.position.y,
+											base_base_pose.pose.position.z)),
+								ros::Time::now(),
+								"/watcher/base_link", "/watcher/softstroller_base_link"));
+
+	posewcov_pub.publish(base_pose_withCov);
+	pose_pub.publish(cam_base_pose);
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "marker_localization");
+	ros::init(argc, argv, "marker_localization");
+	ros::NodeHandle n;
+	ros::Rate loop_rate(100);
 
-  ros::NodeHandle n;
+	m_tfListener = new tf::TransformListener();
+	m_tfBroadcaster = new tf::TransformBroadcaster();
 
-  chatter_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
-  sub = n.subscribe("visualization_marker", 1000, ReceiveCallback);
-  float data_x=0.0;
-  ros::Rate loop_rate(100);
+	posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
+	pose_pub = n.advertise<geometry_msgs::PoseStamped>("softstroller_pose_simple", 1); // For monitoring
+	sub = n.subscribe("visualization_marker", 1000, ReceiveCallback);
+	float data_x=0.0;
 
+	while(ros::ok())
+	{
+		base_pose_withCov.pose.covariance[0] = 0.25;
+		base_pose_withCov.pose.covariance[7] = 0.25;
+		base_pose_withCov.pose.covariance[35] = 0.06853891945200942;
 
-  while(ros::ok())
-  {
-    push_data.header.frame_id = "/map";
-    push_data.pose.covariance[0] = 0.25;
-    push_data.pose.covariance[7] = 0.25;
-    push_data.pose.covariance[35] = 0.06853891945200942;
-    
-
-   // push_data.pose.pose.orientation.z= -0.505052895004;
-   // push_data.pose.pose.orientation.w= 0.863088392488;
-
-   // chatter_pub.publish(push_data);
-    ros::spinOnce();
-    loop_rate.sleep();
-   // ROS_INFO("send_data %f",(float)push_data.pose.pose.position.x);
-  }
-
-  //ros::spin();
-
-  return 0;
+		ros::spinOnce();
+		loop_rate.sleep();
+	}
+	return 0;
 }
