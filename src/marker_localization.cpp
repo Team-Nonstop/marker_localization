@@ -19,33 +19,48 @@ geometry_msgs::PoseWithCovarianceStamped base_pose_withCov;
 geometry_msgs::PoseStamped marker_pose, base_pose;
 geometry_msgs::PoseStamped cam_base_pose, base_base_pose;
 
-void rotateOrientation(geometry_msgs::PoseStamped &pose, double sum_pitch){
-	double r, p, y;
-
+void getRPY(geometry_msgs::PoseStamped &pose,double &r, double &p, double &y){
 	tf::Quaternion quat(pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z,
 			pose.pose.orientation.w);
 
 	tf::Matrix3x3(quat).getRPY(r, p, y);
+}
 
-	pose.pose.orientation.x = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getX();
-	pose.pose.orientation.y = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getY();
-	pose.pose.orientation.z = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getZ();
-	pose.pose.orientation.w = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getW();
+void rotateOrientation(geometry_msgs::PoseStamped &pose, double sum_yaw){
+	double r, p, y;
+	getRPY(pose, r, p, y);
+	tf::Quaternion q = tf::createQuaternionFromRPY(r, p + sum_yaw, y);
+
+	pose.pose.orientation.x = q.getX();
+	pose.pose.orientation.y = q.getY();
+	pose.pose.orientation.z = q.getZ();
+	pose.pose.orientation.w = q.getW();
+}
+
+void correctOrientation(geometry_msgs::PoseStamped &pose){
+	double r, p, y;
+	getRPY(pose, r, p, y);
+	tf::Quaternion q = tf::createQuaternionFromRPY(1.570795, p, 0);
+
+	pose.pose.orientation.x = q.getX();
+	pose.pose.orientation.y = q.getY();
+	pose.pose.orientation.z = q.getZ();
+	pose.pose.orientation.w = q.getW();
 }
 
 void ReceiveCallback(const visualization_msgs::Marker mrk)
 {
 	switch(mrk.id){
 	case 7 : marker_pose.header.frame_id = "/softstroller/marker_front_link";
-			 break;
+	break;
 	case 8 : marker_pose.header.frame_id = "/softstroller/marker_right_link";
-			 break;
+	break;
 	case 9 : marker_pose.header.frame_id = "/softstroller/marker_backward_link";
-			 break;
+	break;
 	case 10 : marker_pose.header.frame_id = "/softstroller/marker_left_link";
-			 break;
+	break;
 	default : marker_pose.header.frame_id = "/softstroller/marker_front_link";
-			 break;
+	break;
 	}
 
 	marker_pose.pose.orientation.w = 1;
@@ -56,31 +71,38 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
 		cam_base_pose.header.frame_id = "/watcher/camera_front";
 		cam_base_pose.pose.position.y = base_pose.pose.position.z; //mrk.pose.position.y + base_pose.pose.position.z;
 		cam_base_pose.pose.orientation = mrk.pose.orientation;
+		correctOrientation(cam_base_pose);
 
 		switch(mrk.id){
-		case 7 : rotateOrientation(cam_base_pose, 1.570795);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
-				 break;
-		case 8 : rotateOrientation(cam_base_pose, 0);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.x;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.y;
-				 break;
-		case 9 : rotateOrientation(cam_base_pose, -1.570795);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.y;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.x;
-				 break;
-		case 10 : rotateOrientation(cam_base_pose, 3.141592);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.x;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.y;
-				 break;
-		default : rotateOrientation(cam_base_pose, 1.570795);
-				  cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
-				  cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
-				  break;
+		case 7 :
+			rotateOrientation(cam_base_pose, 1.570795);
+			cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
+			cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
+			break;
+		case 8 :
+			rotateOrientation(cam_base_pose, 0);
+			cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.x;
+			cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.y;
+			break;
+		case 9 :
+			rotateOrientation(cam_base_pose, -1.570795);
+			cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.y;
+			cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.x;
+			break;
+		case 10 :
+			rotateOrientation(cam_base_pose, 3.141592);
+			cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.x;
+			cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.y;
+			break;
+		default :
+			rotateOrientation(cam_base_pose, 1.570795);
+			cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
+			cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
+			break;
 		}
 
 		m_tfListener->transformPose("/watcher/base_link", cam_base_pose, base_base_pose);
+
 	}
 	catch(tf::TransformException &e)
 	{
