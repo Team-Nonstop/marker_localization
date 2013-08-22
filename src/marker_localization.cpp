@@ -9,124 +9,137 @@
 #include "std_msgs/String.h"
 #include "tf/tf.h"
 
+#include <yaml-cpp/yaml.h>
+#include "marker_localization/marker_mark_data.hpp"
+#include <fstream>
+
 ros::Publisher posewcov_pub, pose_pub;
 ros::Subscriber sub;
 
 tf::TransformListener *m_tfListener;
 tf::TransformBroadcaster *m_tfBroadcaster;
+std::string yaml_file;
 
-geometry_msgs::PoseWithCovarianceStamped base_pose_withCov;
-geometry_msgs::PoseStamped marker_pose, base_pose;
-geometry_msgs::PoseStamped cam_base_pose, base_base_pose;
+void matchParam(int marker_id, std::string &marker_frameid, std::string &target_base_link_frame_id, std::string &robot_name){
+  std::ifstream ifs(yaml_file.c_str(), std::ifstream::in);
 
-void rotateOrientation(geometry_msgs::PoseStamped &pose, double sum_pitch){
-	double r, p, y;
+  if (ifs.good() == false)
+    {
+      ROS_ERROR("CmdVelMux : configuration file not found [%s]", yaml_file.c_str());
+      return;
+    }
+  else
+    ROS_WARN("YAML File found");
 
-	tf::Quaternion quat(pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z,
-			pose.pose.orientation.w);
+  YAML::Parser parser(ifs);
+  YAML::Node doc;
+  parser.GetNextDocument(doc);
 
-	tf::Matrix3x3(quat).getRPY(r, p, y);
+  for(int i = 0; i < doc.size(); i++){
+      MarkerMarkData mmd;
+      std::stringstream ss;
+      ss << i;
+      std::string robot_n = "robot_" + ss.str();
 
-	pose.pose.orientation.x = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getX();
-	pose.pose.orientation.y = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getY();
-	pose.pose.orientation.z = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getZ();
-	pose.pose.orientation.w = tf::createQuaternionFromRPY(0, p + sum_pitch, 0).getW();
+      const YAML::Node *robot_nm_node = doc[robot_n].FindValue("robot_name");
+      const YAML::Node *robot_bl_node = doc[robot_n].FindValue("robot_base_link");
+
+      mmd.configure(doc[robot_n]["mark_data"]);
+      for(int j = 0; j < mmd.size(); j++){
+          if(std::atoi(mmd[j].marker_id.c_str()) == marker_id){
+              marker_frameid = mmd[j].marker_link;
+              *robot_bl_node >> target_base_link_frame_id;
+              *robot_nm_node >> robot_name;
+
+              ROS_WARN("Marker frame id : %s\n Robot base link : %s\n Marker link : %s\n",
+                  marker_frameid.c_str(), target_base_link_frame_id.c_str(), robot_name.c_str());
+          }
+      }
+  }
 }
+
 
 void ReceiveCallback(const visualization_msgs::Marker mrk)
 {
-	switch(mrk.id){
-	case 0 : marker_pose.header.frame_id = "/softstroller/marker_front_link";
-			 break;
-	case 1 : marker_pose.header.frame_id = "/softstroller/marker_right_link";
-			 break;
-	case 2 : marker_pose.header.frame_id = "/softstroller/marker_backward_link";
-			 break;
-	case 3 : marker_pose.header.frame_id = "/softstroller/marker_left_link";
-			 break;
-	default : marker_pose.header.frame_id = "/softstroller/marker_front_link";
-			 break;
-	}
 
-	marker_pose.pose.orientation.w = 1;
-	try
-	{
-		m_tfListener->transformPose("/softstroller/base_link", marker_pose, base_pose);
+  std::string marker_frameid = "/softstroller/marker_front_link";
+  std::string target_base_link_frame_id = "/softstroller/base_link";
+  std::string map_frameid = "/map";
+  std::string camera_frameid = "/watcher/camera_front";
+  std::string robot_name;
 
-		cam_base_pose.header.frame_id = "/watcher/camera_front";
-		cam_base_pose.pose.position.y = base_pose.pose.position.z; //mrk.pose.position.y + base_pose.pose.position.z;
-		cam_base_pose.pose.orientation = mrk.pose.orientation;
+  matchParam(mrk.id, marker_frameid, target_base_link_frame_id, robot_name);
 
-		switch(mrk.id){
-		case 0 : rotateOrientation(cam_base_pose, 1.570795);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
-				 break;
-		case 1 : rotateOrientation(cam_base_pose, 0);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.x;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.y;
-				 break;
-		case 2 : rotateOrientation(cam_base_pose, -1.570795);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.y;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.x;
-				 break;
-		case 3 : rotateOrientation(cam_base_pose, 3.141592);
-				 cam_base_pose.pose.position.x = mrk.pose.position.x - base_pose.pose.position.x;
-				 cam_base_pose.pose.position.z = mrk.pose.position.z - base_pose.pose.position.y;
-				 break;
-		default : rotateOrientation(cam_base_pose, 1.570795);
-				  cam_base_pose.pose.position.x = mrk.pose.position.x + base_pose.pose.position.y;
-				  cam_base_pose.pose.position.z = mrk.pose.position.z + base_pose.pose.position.x;
-				  break;
-		}
+  tf::StampedTransform map_to_camera_transform;
+  tf::StampedTransform camera_to_marker_transform;
+  tf::StampedTransform marker_to_target_base_link_transform;
+  tf::Transform map_to_target_base_link_transform ;
 
-		m_tfListener->transformPose("/watcher/base_link", cam_base_pose, base_base_pose);
-	}
-	catch(tf::TransformException &e)
-	{
-		ROS_ERROR("Failed to transform");
-		return;
-	}
+  tf::Transform marker_transform;
+  marker_transform.setOrigin( tf::Vector3(mrk.pose.position.x, mrk.pose.position.y, mrk.pose.position.z)  );
+  marker_transform.setRotation( tf::Quaternion(mrk.pose.orientation.x,mrk.pose.orientation.y,mrk.pose.orientation.z,mrk.pose.orientation.w) );
+  switch(mrk.id){
+  // Should be replaced by due to parameter's value
+  }
 
-	base_pose_withCov.header.frame_id = base_base_pose.header.frame_id;
-	base_pose_withCov.header.stamp = ros::Time();
-	base_pose_withCov.pose.pose = base_base_pose.pose;
 
-	m_tfBroadcaster->sendTransform(tf::StampedTransform(
-						tf::Transform(
-								tf::Quaternion(base_base_pose.pose.orientation.x, base_base_pose.pose.orientation.y,
-											   base_base_pose.pose.orientation.z, base_base_pose.pose.orientation.w),
-								tf::Vector3(base_base_pose.pose.position.x, base_base_pose.pose.position.y,
-											base_base_pose.pose.position.z)),
-								ros::Time::now(),
-								"/watcher/base_link", "/watcher/softstroller_base_link"));
+  try
+  {
 
-	posewcov_pub.publish(base_pose_withCov);
-	pose_pub.publish(cam_base_pose);
+      //ROS_WARN("GET MARKERS %d",mr);
+      m_tfListener->lookupTransform(map_frameid, camera_frameid, ros::Time(), map_to_camera_transform);
+      m_tfListener->lookupTransform(marker_frameid, target_base_link_frame_id, ros::Time(), marker_to_target_base_link_transform);
+      camera_to_marker_transform = tf::StampedTransform(marker_transform, ros::Time::now(), camera_frameid, marker_frameid);
+
+
+      map_to_target_base_link_transform = map_to_camera_transform*camera_to_marker_transform*marker_to_target_base_link_transform
+          ;
+
+
+
+  }
+  catch(tf::TransformException &e)
+  {
+      ROS_ERROR("Failed to transform");
+      return;
+  }
+
+
+
+  tf::Transform transform;
+  transform.setOrigin( map_to_target_base_link_transform.getOrigin() );
+  transform.setRotation( map_to_target_base_link_transform.getRotation() );
+
+  m_tfBroadcaster->sendTransform(tf::StampedTransform(transform, ros::Time::now(), map_frameid, "/stroller"));
+
+  //      posewcov_pub.publish(base_pose_withCov);
+  //      pose_pub.publish(cam_base_pose);
 }
 
 int main(int argc, char** argv)
 {
-	ros::init(argc, argv, "marker_localization");
-	ros::NodeHandle n;
-	ros::Rate loop_rate(100);
+  ros::init(argc, argv, "marker_localization");
+  ros::NodeHandle n;
+  ros::Rate loop_rate(100);
 
-	m_tfListener = new tf::TransformListener();
-	m_tfBroadcaster = new tf::TransformBroadcaster();
+  m_tfListener = new tf::TransformListener();
+  m_tfBroadcaster = new tf::TransformBroadcaster();
 
-	posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
-	pose_pub = n.advertise<geometry_msgs::PoseStamped>("softstroller_pose_simple", 1); // For monitoring
-	sub = n.subscribe("visualization_marker", 1000, ReceiveCallback);
-	float data_x=0.0;
+  n.getParam("/concert/marker_localization/param/robot_config.yaml", yaml_file);
 
-	while(ros::ok())
-	{
-		base_pose_withCov.pose.covariance[0] = 0.25;
-		base_pose_withCov.pose.covariance[7] = 0.25;
-		base_pose_withCov.pose.covariance[35] = 0.06853891945200942;
+  //      posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
+  //      pose_pub = n.advertise<geometry_msgs::PoseStamped>("softstroller_pose_simple", 1); // For monitoring
+  sub = n.subscribe("/visualization_marker", 1000, ReceiveCallback);
+  //      float data_x=0.0;
 
-		ros::spinOnce();
-		loop_rate.sleep();
-	}
-	return 0;
+  while(ros::ok())
+    {
+      //              base_pose_withCov.pose.covariance[0] = 0.25;
+      //              base_pose_withCov.pose.covariance[7] = 0.25;
+      //              base_pose_withCov.pose.covariance[35] = 0.06853891945200942;
+
+      ros::spinOnce();
+      loop_rate.sleep();
+    }
+  return 0;
 }

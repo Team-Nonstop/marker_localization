@@ -7,7 +7,11 @@ project(marker_localization)
 find_package(catkin REQUIRED COMPONENTS geometry_msgs message_filters nav_msgs rosconsole roscpp rospy tf)
 
 ## System dependencies are found with CMake's conventions
- find_package(Boost REQUIRED COMPONENTS signals)
+find_package(Boost REQUIRED COMPONENTS signals)
+
+# pkg-config support
+find_package(PkgConfig)
+pkg_search_module(REQUIRED yaml-cpp)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -49,10 +53,11 @@ find_package(catkin REQUIRED COMPONENTS geometry_msgs message_filters nav_msgs r
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES marker_localization
+  INCLUDE_DIRS include
+  LIBRARIES marker_localization_
   CATKIN_DEPENDS roscpp rospy
 #  DEPENDS system_lib
+  DEPENDS yaml-cpp
 )
 
 ###########
@@ -62,14 +67,16 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 # include_directories(include)
-include_directories(
+include_directories(include 
   ${catkin_INCLUDE_DIRS}
+  ${yaml-cpp_INCLUDE_DIRS}
 )
 
 ## Declare a cpp library
-# add_library(marker_localization
-#   src/${PROJECT_NAME}/marker_localization.cpp
-# )
+ add_library(marker_localization_
+   #src/${PROJECT_NAME}/marker_localization.cpp
+   src/marker_mark_data.cpp
+ )
 
 ## Declare a cpp executable
 add_executable(marker_localization src/marker_localization.cpp)
@@ -82,6 +89,8 @@ add_executable(marker_localization src/marker_localization.cpp)
  target_link_libraries(marker_localization
    ${catkin_LIBRARIES}
    ${Boost_LIBRARIES}
+   yaml-cpp
+   marker_localization_
  )
 
 #############
@@ -107,6 +116,16 @@ install(
     TARGETS
         marker_localization
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(DIRECTORY
+        param
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(DIRECTORY 
+        include/${PROJECT_NAME}/
+    DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 
 ## Mark executables and/or libraries for installation
