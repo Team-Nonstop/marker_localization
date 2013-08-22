@@ -13,7 +13,7 @@
 #include "marker_localization/marker_mark_data.hpp"
 #include <fstream>
 
-ros::Publisher posewcov_pub, pose_pub;
+ros::Publisher posewcov_pub;
 ros::Subscriber sub;
 
 tf::TransformListener *m_tfListener;
@@ -25,7 +25,7 @@ void matchParam(int marker_id, std::string &marker_frameid, std::string &target_
 
   if (ifs.good() == false)
     {
-      ROS_ERROR("CmdVelMux : configuration file not found [%s]", yaml_file.c_str());
+      ROS_ERROR("configuration file not found [%s]", yaml_file.c_str());
       return;
     }
   else
@@ -35,7 +35,9 @@ void matchParam(int marker_id, std::string &marker_frameid, std::string &target_
   YAML::Node doc;
   parser.GetNextDocument(doc);
 
-  for(int i = 0; i < doc.size(); i++){
+  ROS_WARN("Param config counter : %d", (int)doc.size());
+  for(int i = 0; i < (int)doc.size(); i++){
+
       MarkerMarkData mmd;
       std::stringstream ss;
       ss << i;
@@ -51,7 +53,7 @@ void matchParam(int marker_id, std::string &marker_frameid, std::string &target_
               *robot_bl_node >> target_base_link_frame_id;
               *robot_nm_node >> robot_name;
 
-              ROS_WARN("Marker frame id : %s\n Robot base link : %s\n Marker link : %s\n",
+              ROS_WARN("\n Marker frame id : %s\n Robot base link : %s\n Marker link : %s\n",
                   marker_frameid.c_str(), target_base_link_frame_id.c_str(), robot_name.c_str());
           }
       }
@@ -86,7 +88,7 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
   try
   {
 
-      //ROS_WARN("GET MARKERS %d",mr);
+      ROS_WARN("GET MARKERS %d",mrk.id);
       m_tfListener->lookupTransform(map_frameid, camera_frameid, ros::Time(), map_to_camera_transform);
       m_tfListener->lookupTransform(marker_frameid, target_base_link_frame_id, ros::Time(), marker_to_target_base_link_transform);
       camera_to_marker_transform = tf::StampedTransform(marker_transform, ros::Time::now(), camera_frameid, marker_frameid);
@@ -125,12 +127,14 @@ int main(int argc, char** argv)
   m_tfListener = new tf::TransformListener();
   m_tfBroadcaster = new tf::TransformBroadcaster();
 
-  n.getParam("/concert/marker_localization/param/robot_config.yaml", yaml_file);
 
-  //      posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
-  //      pose_pub = n.advertise<geometry_msgs::PoseStamped>("softstroller_pose_simple", 1); // For monitoring
+  n.getParam("/concert/marker_localization/robot_config_file", yaml_file);
+
+  posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
   sub = n.subscribe("/visualization_marker", 1000, ReceiveCallback);
-  //      float data_x=0.0;
+
+  /*std::string str;
+  matchParam(0, str, str, str);*/
 
   while(ros::ok())
     {
