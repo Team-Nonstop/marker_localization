@@ -20,6 +20,8 @@ tf::TransformListener *m_tfListener;
 tf::TransformBroadcaster *m_tfBroadcaster;
 std::string yaml_file;
 
+geometry_msgs::PoseWithCovarianceStamped poswcov;
+
 void matchParam(int marker_id, std::string &marker_frameid, std::string &target_base_link_frame_id, std::string &robot_name){
   std::ifstream ifs(yaml_file.c_str(), std::ifstream::in);
 
@@ -62,7 +64,6 @@ void matchParam(int marker_id, std::string &marker_frameid, std::string &target_
 
 void ReceiveCallback(const visualization_msgs::Marker mrk)
 {
-
   std::string marker_frameid = "/softstroller/marker_front_link";
   std::string target_base_link_frame_id = "/softstroller/base_link";
   std::string map_frameid = "/map";
@@ -79,25 +80,15 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
   tf::Transform marker_transform;
   marker_transform.setOrigin( tf::Vector3(mrk.pose.position.x, mrk.pose.position.y, mrk.pose.position.z)  );
   marker_transform.setRotation( tf::Quaternion(mrk.pose.orientation.x,mrk.pose.orientation.y,mrk.pose.orientation.z,mrk.pose.orientation.w) );
-  switch(mrk.id){
-  // Should be replaced by due to parameter's value
-  }
-
 
   try
   {
-
       ROS_WARN("GET MARKERS %d",mrk.id);
       m_tfListener->lookupTransform(map_frameid, camera_frameid, ros::Time(), map_to_camera_transform);
       m_tfListener->lookupTransform(marker_frameid, target_base_link_frame_id, ros::Time(), marker_to_target_base_link_transform);
       camera_to_marker_transform = tf::StampedTransform(marker_transform, ros::Time::now(), camera_frameid, marker_frameid);
 
-
-      map_to_target_base_link_transform = map_to_camera_transform*camera_to_marker_transform*marker_to_target_base_link_transform
-          ;
-
-
-
+      map_to_target_base_link_transform = map_to_camera_transform*camera_to_marker_transform*marker_to_target_base_link_transform;
   }
   catch(tf::TransformException &e)
   {
@@ -105,15 +96,13 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
       return;
   }
 
-
   tf::Transform transform;
   transform.setOrigin( map_to_target_base_link_transform.getOrigin() );
   transform.setRotation( map_to_target_base_link_transform.getRotation() );
 
   m_tfBroadcaster->sendTransform(tf::StampedTransform(transform, ros::Time::now(), map_frameid, "/stroller"));
 
-  //      posewcov_pub.publish(base_pose_withCov);
-  //      pose_pub.publish(cam_base_pose);
+  //posewcov_pub.publish(base_pose_withCov);
 }
 
 int main(int argc, char** argv)
@@ -136,10 +125,9 @@ int main(int argc, char** argv)
 
   while(ros::ok())
     {
-      //              base_pose_withCov.pose.covariance[0] = 0.25;
-      //              base_pose_withCov.pose.covariance[7] = 0.25;
-      //              base_pose_withCov.pose.covariance[35] = 0.06853891945200942;
-
+      //base_pose_withCov.pose.covariance[0] = 0.25;
+      //base_pose_withCov.pose.covariance[7] = 0.25;
+      //base_pose_withCov.pose.covariance[35] = 0.06853891945200942;
       ros::spinOnce();
       loop_rate.sleep();
     }
