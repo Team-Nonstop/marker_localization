@@ -1,0 +1,24 @@
+robot_0:
+  robot_name: /softstroller
+  robot_base_link: /softstroller/base_link
+  mark_data:
+   - marker_id: 0
+     marker_link: /softstroller/marker_front_link
+   - marker_id: 1
+     marker_link: /softstroller/marker_right_link
+   - marker_id: 2
+     marker_link: /softstroller/marker_backward_link
+   - marker_id: 3
+     marker_link: /softstroller/marker_left_link
+robot_1:
+  robot_name: /stroller
+  robot_base_link: /stroller/base_link
+  mark_data:
+   - marker_id: 7
+     marker_link: /stroller/marker_front_link
+   - marker_id: 8
+     marker_link: /stroller/marker_right_link
+   - marker_id: 9
+     marker_link: /stroller/marker_backward_link
+   - marker_id: 10
+     marker_link: /stroller/marker_left_link
