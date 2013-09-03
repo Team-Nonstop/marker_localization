@@ -115,7 +115,7 @@ int main(int argc, char** argv)
   m_tfBroadcaster = new tf::TransformBroadcaster();
 
 
-  n.getParam("/concert/marker_localization/robot_config_file", yaml_file);
+  n.getParam("/marker_localization/robot_config_file", yaml_file);
 
   posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
   sub = n.subscribe("/visualization_marker", 1000, ReceiveCallback);
