@@ -13,7 +13,7 @@
 #include "marker_localization/marker_mark_data.hpp"
 #include <fstream>
 
-ros::Publisher posewcov_pub;
+ros::Publisher posewcov_pub0, posewcov_pub1, posewcov_pub2, posewcov_pub3;
 ros::Subscriber sub;
 
 tf::TransformListener *m_tfListener;
@@ -22,7 +22,29 @@ std::string yaml_file;
 
 geometry_msgs::PoseWithCovarianceStamped poswcov;
 
-void matchParam(int marker_id, std::string &marker_frameid, std::string &target_base_link_frame_id, std::string &robot_name){
+std::string itoa(int n){
+	std::stringstream ss;
+	ss << n;
+	return ss.str();
+}
+
+int getParamCnt(){
+	std::ifstream ifs(yaml_file.c_str(), std::ifstream::in);
+
+	if (ifs.good() == false)
+	{
+		ROS_ERROR("configuration file not found [%s]", yaml_file.c_str());
+		return 0;
+	}
+
+	YAML::Parser parser(ifs);
+	YAML::Node doc;
+	parser.GetNextDocument(doc);
+
+	return (int)doc.size();
+}
+
+void matchParam(int marker_id, std::string &marker_frameid, std::string &target_base_link_frame_id, std::string &robot_name, int &robot_num){
   std::ifstream ifs(yaml_file.c_str(), std::ifstream::in);
 
   if (ifs.good() == false)
@@ -41,9 +63,7 @@ void matchParam(int marker_id, std::string &marker_frameid, std::string &target_
   for(int i = 0; i < (int)doc.size(); i++){
 
       MarkerMarkData mmd;
-      std::stringstream ss;
-      ss << i;
-      std::string robot_n = "robot_" + ss.str();
+      std::string robot_n = "robot_" + itoa(i);
 
       const YAML::Node *robot_nm_node = doc[robot_n].FindValue("robot_name");
       const YAML::Node *robot_bl_node = doc[robot_n].FindValue("robot_base_link");
@@ -54,7 +74,7 @@ void matchParam(int marker_id, std::string &marker_frameid, std::string &target_
               marker_frameid = mmd[j].marker_link;
               *robot_bl_node >> target_base_link_frame_id;
               *robot_nm_node >> robot_name;
-
+              robot_num = i;
               ROS_WARN("\n Marker frame id : %s\n Robot base link : %s\n Marker link : %s\n",
                   marker_frameid.c_str(), target_base_link_frame_id.c_str(), robot_name.c_str());
           }
@@ -69,8 +89,9 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
   std::string map_frameid = "/map";
   std::string camera_frameid = "/watcher/camera_front";
   std::string robot_name;
+  int robot_num;
 
-  matchParam(mrk.id, marker_frameid, target_base_link_frame_id, robot_name);
+  matchParam(mrk.id, marker_frameid, target_base_link_frame_id, robot_name, robot_num);
 
   tf::StampedTransform map_to_camera_transform;
   tf::StampedTransform camera_to_marker_transform;
@@ -100,9 +121,29 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
   transform.setOrigin( map_to_target_base_link_transform.getOrigin() );
   transform.setRotation( map_to_target_base_link_transform.getRotation() );
 
-  m_tfBroadcaster->sendTransform(tf::StampedTransform(transform, ros::Time::now(), map_frameid, "/stroller"));
+  m_tfBroadcaster->sendTransform(tf::StampedTransform(transform, ros::Time::now(), map_frameid, robot_name));
 
-  //posewcov_pub.publish(base_pose_withCov);
+  poswcov.pose.pose.position.x = map_to_target_base_link_transform.getOrigin().x();
+  poswcov.pose.pose.position.y = map_to_target_base_link_transform.getOrigin().y();
+  poswcov.pose.pose.position.z = map_to_target_base_link_transform.getOrigin().z();
+  poswcov.pose.pose.orientation.x = map_to_target_base_link_transform.getRotation().x();
+  poswcov.pose.pose.orientation.y = map_to_target_base_link_transform.getRotation().y();
+  poswcov.pose.pose.orientation.z = map_to_target_base_link_transform.getRotation().z();
+  poswcov.pose.pose.orientation.w = map_to_target_base_link_transform.getRotation().w();
+  poswcov.pose.covariance[0] = 0.25;
+  poswcov.pose.covariance[7] = 0.25;
+  poswcov.pose.covariance[35] = 0.06853891945200942;
+
+  switch(robot_num){
+  case 0 : posewcov_pub0.publish(poswcov);
+  break;
+  case 1 : posewcov_pub1.publish(poswcov);
+  break;
+  case 2 : posewcov_pub2.publish(poswcov);
+  break;
+  case 3 : posewcov_pub3.publish(poswcov);
+  break;
+  }
 }
 
 int main(int argc, char** argv)
@@ -117,7 +158,14 @@ int main(int argc, char** argv)
 
   n.getParam("/concert/marker_localization/robot_config_file", yaml_file);
 
-  posewcov_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("softstroller_pose", 1);
+  int param_n = getParamCnt();
+
+  // 4 robots
+  posewcov_pub0 = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("robot0", 1);
+  posewcov_pub1 = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("robot1", 1);
+  posewcov_pub2 = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("robot2", 1);
+  posewcov_pub3 = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("robot3", 1);
+
   sub = n.subscribe("/visualization_marker", 1000, ReceiveCallback);
 
   /*std::string str;
@@ -125,9 +173,6 @@ int main(int argc, char** argv)
 
   while(ros::ok())
     {
-      //base_pose_withCov.pose.covariance[0] = 0.25;
-      //base_pose_withCov.pose.covariance[7] = 0.25;
-      //base_pose_withCov.pose.covariance[35] = 0.06853891945200942;
       ros::spinOnce();
       loop_rate.sleep();
     }
