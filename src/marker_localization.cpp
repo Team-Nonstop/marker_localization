@@ -156,7 +156,7 @@ int main(int argc, char** argv)
   m_tfBroadcaster = new tf::TransformBroadcaster();
 
 
-  n.getParam("/concert/marker_localization/robot_config_file", yaml_file);
+  n.getParam("/marker_localization/robot_config_file", yaml_file);
 
   int param_n = getParamCnt();
 
