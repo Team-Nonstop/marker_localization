@@ -1,27 +1,27 @@
 robot_0:
-  robot_name: /softstroller
-  robot_base_link: /softstroller/base_link
+  robot_name: /hyundai
+  robot_base_link: /hyundai/base_link
   mark_data:
    - marker_id: 4
-     marker_link: /softstroller/marker_front_link
-   - marker_id: 5
-     marker_link: /softstroller/marker_right_link
-   - marker_id: 6
-     marker_link: /softstroller/marker_backward_link
+     marker_link: /hyundai/marker_front_link
+   - marker_id: 6 
+     marker_link: /hyundai/marker_right_link
    - marker_id: 7
-     marker_link: /softstroller/marker_left_link
+     marker_link: /hyundai/marker_backward_link
+   - marker_id: 5
+     marker_link: /hyundai/marker_left_link
 robot_1:
-  robot_name: /stroller
-  robot_base_link: /stroller/base_link
+  robot_name: /samsung
+  robot_base_link: /samsung/base_link
   mark_data:
    - marker_id: 8
-     marker_link: /stroller/marker_front_link
-   - marker_id: 9
-     marker_link: /stroller/marker_right_link
-   - marker_id: 10
-     marker_link: /stroller/marker_backward_link
+     marker_link: /samsung/marker_front_link
    - marker_id: 11
-     marker_link: /stroller/marker_left_link
+     marker_link: /samsung/marker_right_link
+   - marker_id: 10
+     marker_link: /samsung/marker_backward_link
+   - marker_id: 9
+     marker_link: /samsung/marker_left_link
 robot_2:
   robot_name: /mapper
   robot_base_link: /mapper/base_link
