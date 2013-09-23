@@ -8,7 +8,7 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include "std_msgs/String.h"
 #include "tf/tf.h"
-
+#include "tf/LinearMath/Quaternion.h"
 #include <yaml-cpp/yaml.h>
 #include "marker_localization/marker_mark_data.hpp"
 #include <fstream>
@@ -26,22 +26,6 @@ std::string itoa(int n){
 	std::stringstream ss;
 	ss << n;
 	return ss.str();
-}
-
-int getParamCnt(){
-	std::ifstream ifs(yaml_file.c_str(), std::ifstream::in);
-
-	if (ifs.good() == false)
-	{
-		ROS_ERROR("configuration file not found [%s]", yaml_file.c_str());
-		return 0;
-	}
-
-	YAML::Parser parser(ifs);
-	YAML::Node doc;
-	parser.GetNextDocument(doc);
-
-	return (int)doc.size();
 }
 
 void matchParam(int marker_id, std::string &marker_frameid, std::string &target_base_link_frame_id, std::string &robot_name, int &robot_num){
@@ -157,8 +141,6 @@ int main(int argc, char** argv)
 
 
   n.getParam("/marker_localization/robot_config_file", yaml_file);
-
-  int param_n = getParamCnt();
 
   // 4 robots
   posewcov_pub0 = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("robot0", 1);
