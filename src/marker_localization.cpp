@@ -102,14 +102,15 @@ void ReceiveCallback(const visualization_msgs::Marker mrk)
   }
 
   tf::Transform transform;
+  
   transform.setOrigin( map_to_target_base_link_transform.getOrigin() );
   transform.setRotation( map_to_target_base_link_transform.getRotation() );
-
+  
   m_tfBroadcaster->sendTransform(tf::StampedTransform(transform, ros::Time::now(), map_frameid, robot_name));
 
   poswcov.pose.pose.position.x = map_to_target_base_link_transform.getOrigin().x();
   poswcov.pose.pose.position.y = map_to_target_base_link_transform.getOrigin().y();
-  poswcov.pose.pose.position.z = map_to_target_base_link_transform.getOrigin().z();
+  poswcov.pose.pose.position.z = 0;//map_to_target_base_link_transform.getOrigin().z();
   poswcov.pose.pose.orientation.x = map_to_target_base_link_transform.getRotation().x();
   poswcov.pose.pose.orientation.y = map_to_target_base_link_transform.getRotation().y();
   poswcov.pose.pose.orientation.z = map_to_target_base_link_transform.getRotation().z();
